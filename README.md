@@ -3,7 +3,7 @@
 - Automatically create questions and answers from various input formats (PDF files, webpages, wikipedia, epub files, etc) then export them into your favorite flashcards software (like [anki](https://apps.ankiweb.net/) or [SuperMemo](https://supermemo.guru/wiki/SuperMemo))
 - To see a real world example, the complete output of [this article](https://www.biography.com/political-figure/philip-ii-of-macedon) can be found [in this folder](./output_example/). It's the direct output with no post processing whatsoever.
 - Code is PEP compliant and with docstrings. Contributions and PR are extremely appreciated
-- Learn more by reading [the official write-up](https://psionica.org/docs/lab/autocards/).
+- Learn more by reading [the official write-up](https://psionica.org/tools/autocards/).
 
 ## Install guide:
 
