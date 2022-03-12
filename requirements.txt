@@ -11,3 +11,4 @@ epub-conversion==1.0.15
 xml_cleaner==2.0.4
 html_text==0.5.2
 EbookLib~=0.17.1
+pdftotext~=2.2.2
