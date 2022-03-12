@@ -13,10 +13,14 @@ from bs4 import BeautifulSoup
 from epub_conversion.utils import open_book, convert_epub_to_lines
 from tika import parser
 from tqdm import tqdm
+from torch.cuda import empty_cache
 
 from pipelines import question_generation_pipeline
 
 os.environ["TOKENIZERS_PARALLELISM"] = "true"
+
+
+
 
 
 class Autocards:
@@ -34,62 +38,68 @@ class Autocards:
                  cloze_type="anki",
                  model="valhalla/distilt5-qa-qg-hl-12-6",
                  ans_model="valhalla/distilt5-qa-qg-hl-12-6"):
+        self.cloze_type = cloze_type
+        self.original_content_language = original_content_language
+        self.output_language = output_language
+        self.original_content_translator = None
+        self.output_translator = None
         self.title = None
         print("Loading backend, this can take some time...")
         self.store_original_paragraph_in_output = store_original_paragraph_in_output
         self.model = model
         self.ans_model = ans_model
 
-        self.verify_if_language_code_has_two_letter(original_content_language, output_language)
-        self.original_content_language = self.load_translation_model_for_original_content_language(original_content_language)
-        self.output_language = self.load_translation_model_for_output_content_language(output_language)
-        self.cloze_type = cloze_type
+        self._validate_if_language_code_has_two_letter()
+        self.translation_model_for_original_content_language = self.load_translation_model_for_original_content_language()
+        self.translation_model_for_output_language = self.load_translation_model_for_output_content_language()
+        self.software_cloze_type = cloze_type
 
-        self.questiongenerationpipeline = question_generation_pipeline('question-generation',
-                                                                       model=model,
-                                                                       ans_model=ans_model)
+        self.question_generation_pipeline = question_generation_pipeline('question-generation',
+                                                                         model=model,
+                                                                         ans_model=ans_model)
         self.question_answering_dictionary_list = []
 
+        self._validate_cloze_type_input()
+
+    def _validate_if_language_code_has_two_letter(self):
+        if len(self.output_language) != 2 or len(self.original_content_language) not in [2, 3]:
+            print("Output and input language has to be a two letter code like 'en' or 'fr'")
+            raise SystemExit()
+
+    def _validate_cloze_type_input(self):
         if self.cloze_type not in ["anki", "SM"]:
             print("Invalid cloze type, must be either 'anki' or \
 'SM'")
             raise SystemExit()
 
-    def load_translation_model_for_output_content_language(self, output_language):
-        if output_language != "en":
+    def load_translation_model_for_output_content_language(self):
+        if self.output_language != "en":
             print("The flashcards will be automatically translated after being \
 created. This can result in lower quality cards. Expect lowest quality cards \
 than usual.")
             try:
                 print("Loading output translation model...")
                 from transformers import pipeline
-                self.output_translator = pipeline(f"translation_en_to_{output_language}",
-                                                  model=f"Helsinki-NLP/opus-mt-en-{output_language}")
+                self.output_translator = pipeline(f"translation_en_to_{self.output_language}",
+                                                  model=f"Helsinki-NLP/opus-mt-en-{self.output_language}")
             except Exception as e:
                 print(f"Was not able to load translation pipeline: {e}")
                 print("Resetting output language to english.")
-                output_language = "en"
-        return output_language
+                self.output_language = "en"
 
-    def load_translation_model_for_original_content_language(self, original_content_language):
-        if original_content_language != "en":
+    def load_translation_model_for_original_content_language(self):
+        if self.original_content_language != "en":
             print("The document will automatically be translated before creating flashcards. Expect lower quality "
                   "cards than usual.")
             try:
                 print("Loading input translation model...")
                 from transformers import pipeline
-                self.load_translation_model_based = pipeline(f"translation_{original_content_language}_to_en",
-                                                             model=f"Helsinki-NLP/opus-mt-{original_content_language}-en")
+                self.original_content_translator = pipeline(f"translation_{self.original_content_language}_to_en",
+                                                             model=f"Helsinki-NLP/opus-mt-{self.original_content_language}-en")
             except Exception as e:
                 print(f"Was not able to load translation pipeline: {e}")
                 print("Resetting input language to english.")
-                original_content_language = "en"
-        return original_content_language
-
-    def verify_if_language_code_has_two_letter(self, original_content_language, output_language):
-        if len(output_language) != 2 or len(original_content_language) not in [2, 3]:
-            print("Output and input language has to be a two letter code like 'en' or 'fr'")
-            raise SystemExit()
+                self.original_content_language = "en"
 
     def _call_question_generation_module(self, text, title):
         """
@@ -97,53 +107,50 @@ than usual.")
         dictionary containing metadata (clozed formating, creation time,
         title, source text)
         """
-        to_add_cloze_notes = []
-        to_add_basic_notes = []
+        cloze_notes_list = []
+        basic_notes_list = []
         original_text = ""
-        original_content__language_is_not_english = self.original_content_language != "en"
-        if original_content__language_is_not_english:
+        original_content_language_is_not_english = self.original_content_language != "en"
+        if original_content_language_is_not_english:
             original_text = str(text)
-            text = self.load_translation_model_based(text)[0]["translation_text"]
+            text = self.original_content_translator(text)[0]["translation_text"]
 
         try:
-            question_answering_list_from_text = self.questiongenerationpipeline(text)
-            to_add_cloze_notes = []
+            question_answering_list_from_text = self.question_generation_pipeline(text)
+            empty_cache()
+            cloze_notes_list = []
+            basic_notes_list = []
             for question_answer in question_answering_list_from_text:
                 if question_answer["note_type"] == "cloze":
-                    to_add_cloze_notes.append(question_answer)
-            to_add_basic_notes = []
-            for question_answer in question_answering_list_from_text:
+                    cloze_notes_list.append(question_answer)
                 if question_answer["note_type"] == "basic":
-                    to_add_basic_notes.append(question_answer)
+                    basic_notes_list.append(question_answer)
+
         except IndexError:
             tqdm.write(f"\nSkipping section because no cards \
 could be made from that text: '{text}'")
-            to_add_basic_notes.append({"question": "skipped",
-                                 "answer": "skipped",
-                                 "cloze": "",
-                                 "note_type": "basic"})
 
         current_time = time.asctime()
         stored_text = ""
         stored_text_orig = ""
-        store_original_paragraph_in_output = self.store_original_paragraph_in_output is True
-        if store_original_paragraph_in_output:
+        
+        if self.store_original_paragraph_in_output:
             stored_text = text
             stored_text_orig = original_text
 
-        self.add_extracted_basic_notes_to_list(to_add_basic_notes)
-        self.add_extracted_cloze_notes_to_list(to_add_cloze_notes)
+        self.add_extracted_basic_notes_to_list(basic_notes_list)
+        self.add_extracted_cloze_notes_to_list(cloze_notes_list)
 
         # merging cloze of the same text as a single question_answer with several cloze:
         self.merge_cloze_as_single_question_answer_with_several_cloze(current_time, stored_text, stored_text_orig,
-                                                                      title, to_add_basic_notes, to_add_cloze_notes)
+                                                                      title, basic_notes_list, cloze_notes_list)
 
         tqdm.write(f"Number of question generated so far: {len(self.question_answering_dictionary_list)}")
 
     def merge_cloze_as_single_question_answer_with_several_cloze(self, current_time, stored_text, stored_text_orig,
-                                                                 title, to_add_basic_notes, to_add_cloze_notes):
-        if to_add_cloze_notes:
-            for iterator in range(0, len(to_add_cloze_notes) - 1):
+                                                                 title, basic_notes_list, cloze_notes_list):
+        if cloze_notes_list:
+            for iterator in range(0, len(cloze_notes_list) - 1):
                 if self.cloze_type == "SM":
                     tqdm.write("SM cloze not yet implemented, luckily \
 SuperMemo supports importing from anki format. Hence the anki format will \
@@ -152,16 +159,16 @@ be used for your input.")
 
                 if self.cloze_type == "anki" and len(self.question_answering_dictionary_list) != iterator:
                     cl1 = re.sub(r"{{c\d+::|}}|\s", "",
-                                 to_add_cloze_notes[iterator]["cloze"])
+                                 cloze_notes_list[iterator]["cloze"])
                     cl2 = re.sub(r"{{c\d+::|}}|\s", "",
-                                 to_add_cloze_notes[iterator + 1]["cloze"])
+                                 cloze_notes_list[iterator + 1]["cloze"])
                     if cl1 == cl2:
                         match = re.findall(r"{{c\d+::(.*?)}}",
-                                           to_add_cloze_notes[iterator]["cloze"])
+                                           cloze_notes_list[iterator]["cloze"])
                         match.extend(re.findall(r"{{c\d+::(.*?)}}",
-                                                to_add_cloze_notes[iterator + 1]["cloze"]))
+                                                cloze_notes_list[iterator + 1]["cloze"]))
                         clean_cloze = re.sub(r"{{c\d+::|}}", "",
-                                             to_add_cloze_notes[iterator]["cloze"])
+                                             cloze_notes_list[iterator]["cloze"])
                         if "" in match:
                             match.remove("")
                         match = list(set(match))
@@ -172,9 +179,9 @@ be used for your input.")
                             clean_cloze = clean_cloze.replace(q, new_q)
                         clean_cloze = clean_cloze.strip()
 
-                        to_add_cloze_notes[iterator]['cloze'] = clean_cloze + "___TO_REMOVE___"
-                        to_add_cloze_notes[iterator + 1]['cloze'] = clean_cloze
-        to_add_full = to_add_cloze_notes + to_add_basic_notes
+                        cloze_notes_list[iterator]['cloze'] = clean_cloze + "___TO_REMOVE___"
+                        cloze_notes_list[iterator + 1]['cloze'] = clean_cloze
+        to_add_full = cloze_notes_list + basic_notes_list
         for qa in to_add_full:
             qa["date"] = current_time
             qa["source_title"] = title
@@ -250,8 +257,8 @@ be used for your input.")
         text = re.sub(r"\[\d*\]", "", text)
         return text
 
-    def create_question_answering_pairs_from_input(self, text, title="untitled variable",
-                                                   process_text_per_paragraph=False):
+    def text_to_question_answering_pairs(self, text, title="Title",
+                                         process_text_per_paragraph=False):
         """Take text as input and create qa pairs"""
         text = text.replace('\xad ', '')
         text = text.strip()
@@ -279,7 +286,7 @@ be used for your input.")
 
         print("\nFeeding your text to Autocards...")
         user_input = self._sanitize_text(user_input)
-        self.create_question_answering_pairs_from_input(user_input, title, process_text_per_paragraph=False)
+        self.text_to_question_answering_pairs(user_input, title, process_text_per_paragraph=False)
         print("Done feeding text.")
 
     def convert_pdf_into_question_answering_pairs(self, pdf_path, per_paragraph=True):
@@ -298,9 +305,9 @@ after preprocessing the text yourself.")
 
         text = self._sanitize_text(safe_text)
 
-        self.create_question_answering_pairs_from_input(text, title, per_paragraph)
+        self.text_to_question_answering_pairs(text, title, per_paragraph)
 
-    def convert_text_file_into_question_answering_pairs(self, filepath, per_paragraph=False):
+    def convert_text_file_into_question_answering_pairs(self, filepath, per_paragraph=True):
         "Take text pdf_file as input and create qa pairs"
         file_dont_exists = not Path(filepath).exists()
         if file_dont_exists:
@@ -313,9 +320,9 @@ after preprocessing the text yourself.")
 are you sure you don't want to try to split the text by paragraph?\sentence_list_count(y/sentence_list_count)>")
             if question != "sentence_list_count":
                 per_paragraph = True
-        self.create_question_answering_pairs_from_input(text,
-                                                        filename,
-                                                        process_text_per_paragraph=per_paragraph)
+        self.text_to_question_answering_pairs(text,
+                                              filename,
+                                              process_text_per_paragraph=per_paragraph)
 
     def convert_epub_into_question_answering_pairs(self, filepath, title="untitled epub pdf_file"):
         """Take an epub pdf_file as input and create qa pairs"""
@@ -325,30 +332,28 @@ are you sure you don't want to try to split the text by paragraph?\sentence_list
         text = text.replace("&nbsp;", " ")
         text = text.replace("&dash;", "-")
         text = re.sub("&.*?;", " ", text)
-        # make paragraph limitation as expected in self.create_question_answering_pairs_from_input:
+        # make paragraph limitation as expected in self.text_to_question_answering_pairs:
         text = text.replace("\r", "\n\n")
         text = re.sub("\n\n\n*", "\n\n", text)
         text = self._sanitize_text(text)
-        self.create_question_answering_pairs_from_input(text, title, process_text_per_paragraph=True)
+        self.text_to_question_answering_pairs(text, title, process_text_per_paragraph=True)
 
     def convert_html_web_page_into_question_answering_pairs(self, source, mode="url", element="p"):
         """Take html pdf_file (local or via url) and create qa pairs"""
-        if mode not in ["local", "url"]:
-            return "invalid arguments"
         if mode == "local":
             soup = BeautifulSoup(open(source), 'xml')
         elif mode == "url":
             res = requests.get(source, timeout=15)
             html = res.content
             soup = BeautifulSoup(html, 'xml')
-
+        else:
+            return "invalid arguments"
         try:
             el = soup.article.body.find_all(element)
         except AttributeError:
             print("Using fallback method to extract page content")
             el = soup.find_all(element)
 
-        title = ""
         with suppress(Exception):
             title = soup.find_all('h1')[0].text
         if title == "":
@@ -389,6 +394,7 @@ are you sure you don't want to try to split the text by paragraph?\sentence_list
 
     def return_question_answering_pairs(self, prefix='', jeopardy=False):
         "Return qa pairs to the user"
+        global string
         if prefix != "" and prefix[-1] != ' ':
             prefix += ' '
         if len(self.question_answering_dictionary_list) == 0:
