@@ -27,7 +27,7 @@ class Autocards:
     """
     Main class used to create flashcards from text. The variable notetype refers to the type
     of flashcard that must be created: either cloze, basic or both. The
-    variable wtm allow to specify wether you want to remove the mention of
+    variable wtm allow specifying whether you want to remove the mention of
     Autocards in your cards.
     """
 
@@ -36,8 +36,8 @@ class Autocards:
                  original_content_language="en",
                  output_language="en",
                  cloze_type="anki",
-                 model="valhalla/distilt5-qa-qg-hl-12-6",
-                 ans_model="valhalla/distilt5-qa-qg-hl-12-6"):
+                 model="valhalla/distilt5-qa-qg-hl-6-4",
+                 ans_model="valhalla/distilt5-qa-qg-hl-6-4"):
         self.cloze_type = cloze_type
         self.original_content_language = original_content_language
         self.output_language = output_language
@@ -50,8 +50,6 @@ class Autocards:
         self.ans_model = ans_model
 
         self._validate_if_language_code_has_two_letter()
-        self.translation_model_for_original_content_language = self.load_translation_model_for_original_content_language()
-        self.translation_model_for_output_language = self.load_translation_model_for_output_content_language()
         self.software_cloze_type = cloze_type
 
         self.question_generation_pipeline = question_generation_pipeline('question-generation',
@@ -104,7 +102,7 @@ than usual.")
     def _call_question_generation_module(self, text, title):
         """
         Call question generation module, then turn the answer into a
-        dictionary containing metadata (clozed formating, creation time,
+        dictionary containing metadata (clozed formatting, creation time,
         title, source text)
         """
         cloze_notes_list = []
@@ -195,7 +193,7 @@ be used for your input.")
     def add_extracted_cloze_notes_to_list(self, to_add_cloze_notes):
         if to_add_cloze_notes:
             for iterator in range(0, len(to_add_cloze_notes)):
-                if to_add_cloze_notes[iterator]["note_type"] == "cloze":  # cloze formating
+                if to_add_cloze_notes[iterator]["note_type"] == "cloze":  # cloze formatting
                     if self.output_language != "en":
                         to_add_cloze_notes[iterator]["cloze_orig"] = to_add_cloze_notes[iterator]["cloze"]
                         original_clozed_notes_string = to_add_cloze_notes[iterator]["cloze_orig"]
@@ -279,7 +277,7 @@ be used for your input.")
             self._call_question_generation_module(text, title)
 
     def convert_user_input_into_question_answering_pairs(self, title="untitled user input"):
-        "Take user input and create qa pairs"
+        """Take user input and create qa pairs"""
         user_input = input("Enter your text below then press Enter (press\
  enter twice to validate input):\n>")
         user_input = user_input.strip()
@@ -290,7 +288,7 @@ be used for your input.")
         print("Done feeding text.")
 
     def convert_pdf_into_question_answering_pairs(self, pdf_path, per_paragraph=True):
-        "Take pdf pdf_file as input and create qa pairs"
+        """Take pdf pdf_file as input and create qa pairs"""
         if not Path(pdf_path).exists():
             print(f"PDF pdf_file not found at {pdf_path}!")
             return None
@@ -308,7 +306,7 @@ after preprocessing the text yourself.")
         self.text_to_question_answering_pairs(text, title, per_paragraph)
 
     def convert_text_file_into_question_answering_pairs(self, filepath, per_paragraph=True):
-        "Take text pdf_file as input and create qa pairs"
+        """Take text pdf_file as input and create qa pairs"""
         file_dont_exists = not Path(filepath).exists()
         if file_dont_exists:
             print(f"File not found at {filepath}")
@@ -379,7 +377,7 @@ are you sure you don't want to try to split the text by paragraph?\sentence_list
         if not valid_sections:
             print("No valid sections found, change the 'element' argument\
  to look for other html sections than 'p'. Find the relevant 'element' using \
- the 'inspect' functionnality in your favorite browser.")
+ the 'inspect' functionality in your favorite browser.")
             return None
 
         for section in tqdm(valid_sections,
@@ -389,11 +387,11 @@ are you sure you don't want to try to split the text by paragraph?\sentence_list
             self._call_question_generation_module(section, title)
 
     def clear_question_answering_pairs(self):
-        "Delete currently stored qa pairs"
+        """Delete currently stored qa pairs"""
         self.question_answering_dictionary_list = []
 
     def return_question_answering_pairs(self, prefix='', jeopardy=False):
-        "Return qa pairs to the user"
+        """Return qa pairs to the user"""
         global string
         if prefix != "" and prefix[-1] != ' ':
             prefix += ' '
@@ -414,11 +412,11 @@ are you sure you don't want to try to split the text by paragraph?\sentence_list
         return response
 
     def print(self, *args, **kwargs):
-        "Print qa pairs to the user"
+        """Print qa pairs to the user"""
         print(self.return_question_answering_pairs(*args, **kwargs))
 
     def pprint(self, *args, **kwargs):
-        "Prettyprint qa pairs to the user"
+        """Prettyprint qa pairs to the user"""
         pprint(self.return_question_answering_pairs(*args, **kwargs))
 
     def _combine_df_columns(self, row, col_names):
@@ -428,7 +426,7 @@ are you sure you don't want to try to split the text by paragraph?\sentence_list
 
         return "#" * 15 + "Combined columns:<br>\n" + combined + "#" * 15
 
-    def pandas_df(self, prefix=''):
+    def pandas_df(self):
         if len(self.question_answering_dictionary_list) == 0:
             print("No qa generated yet!")
             return None
@@ -439,7 +437,7 @@ are you sure you don't want to try to split the text by paragraph?\sentence_list
         for i in df.index:
             for c in df.columns:
                 if pd.isna(df.loc[i, c]):
-                    # otherwise export functions break:
+                    # otherwise, export functions break:
                     df.loc[i, c] = ""
         if self.original_content_language == "en":
             df = df.drop(columns=["source_text_orig"], axis=1)
@@ -450,15 +448,13 @@ are you sure you don't want to try to split the text by paragraph?\sentence_list
                                   for x in df.index]
         return df
 
-    def to_csv(self, filename="Autocards_export.csv", prefix=''):
-        "Export qa pairs as csv pdf_file"
+    def to_csv(self, filename="Autocards_export.csv"):
+        """Export qa pairs as csv pdf_file"""
         if len(self.question_answering_dictionary_list) == 0:
             print("No qa generated yet!")
             return None
-        if prefix != "" and prefix[-1] != ' ':
-            prefix += ' '
 
-        df = self.pandas_df(prefix)
+        df = self.pandas_df()
 
         for i in df.index:
             for c in df.columns:
@@ -470,15 +466,13 @@ are you sure you don't want to try to split the text by paragraph?\sentence_list
         df[df["note_type"] != "cloze"].to_csv(f"{filename}_basic.csv")
         print(f"Done writing qa pairs to {filename}_cloze.csv and {filename}_basic.csv")
 
-    def to_json(self, filename="Autocards_export.json", prefix=''):
-        "Export qa pairs as json pdf_file"
+    def to_json(self, filename="Autocards_export.json"):
+        """Export qa pairs as json pdf_file"""
         if len(self.question_answering_dictionary_list) == 0:
             print("No qa generated yet!")
             return None
-        if prefix != "" and prefix[-1] != ' ':
-            prefix += ' '
 
-        df = self.pandas_df(prefix)
+        df = self.pandas_df()
 
         if ".json" in filename:
             filename = filename.replace(".json", "")
@@ -488,18 +482,18 @@ are you sure you don't want to try to split the text by paragraph?\sentence_list
 {filename}_basic.json")
 
     def _ankiconnect_invoke(self, action, **params):
-        "send requests to ankiconnect addon"
+        """send requests to ankiconnect addon"""
 
         def request_wrapper(action, **params):
             return {'action': action, 'params': params, 'version': 6}
 
-        requestJson = json.dumps(request_wrapper(action, **params)
+        request_json = json.dumps(request_wrapper(action, **params)
                                  ).encode('utf-8')
         try:
             response = json.load(urllib.request.urlopen(
                 urllib.request.Request(
                     'http://localhost:8765',
-                    requestJson)))
+                    request_json)))
         except (ConnectionRefusedError, urllib.error.URLError) as e:
             print(f"{e}: is Anki open? Is the addon 'anki-connect' enabled?")
             raise SystemExit()
@@ -516,7 +510,7 @@ are you sure you don't want to try to split the text by paragraph?\sentence_list
         return response['result']
 
     def to_anki(self, deckname="Autocards_export", tags=[""]):
-        "Export cards to anki using anki-connect addon"
+        """Export cards to anki using anki-connect addon"""
         df = self.pandas_df()
         df["generation_order"] = [str(int(x) + 1) for x in list(df.index)]
         columns = df.columns.tolist()
@@ -555,7 +549,7 @@ are you sure you don't want to try to split the text by paragraph?\sentence_list
 sent correctly.")
         if list(set(out)) != [None]:
             print("Cards sent to anki collection.\nYou can now open anki and use \
-'change note type' to export the fields you need to your prefered notetype.")
+'change note type' to export the fields you need to your preferred notetype.")
         else:
             print("An error happened: no cards were successfuly sent to anki.")
 
