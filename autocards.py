@@ -5,22 +5,19 @@ import time
 import urllib.request
 from contextlib import suppress
 from pathlib import Path
-from pprint import pprint
 
+import ebooklib
+import html_text
 import pandas as pd
+import pdftotext
 import requests
-from bs4 import BeautifulSoup
-from epub_conversion.utils import open_book, convert_epub_to_lines
-from tika import parser
-from tqdm import tqdm
+from ebooklib import epub
 from torch.cuda import empty_cache
+from tqdm import tqdm
 
 from pipelines import question_generation_pipeline
 
 os.environ["TOKENIZERS_PARALLELISM"] = "true"
-
-
-
 
 
 class Autocards:
@@ -93,7 +90,7 @@ than usual.")
                 print("Loading input translation model...")
                 from transformers import pipeline
                 self.original_content_translator = pipeline(f"translation_{self.original_content_language}_to_en",
-                                                             model=f"Helsinki-NLP/opus-mt-{self.original_content_language}-en")
+                                                            model=f"Helsinki-NLP/opus-mt-{self.original_content_language}-en")
             except Exception as e:
                 print(f"Was not able to load translation pipeline: {e}")
                 print("Resetting input language to english.")
@@ -131,7 +128,7 @@ could be made from that text: '{text}'")
         current_time = time.asctime()
         stored_text = ""
         stored_text_orig = ""
-        
+
         if self.store_original_paragraph_in_output:
             stored_text = text
             stored_text_orig = original_text
@@ -235,9 +232,9 @@ be used for your input.")
                         to_add_basic_notes[iterator]["question_orig"] = to_add_basic_notes[iterator]["question"]
                         to_add_basic_notes[iterator]["answer_orig"] = to_add_basic_notes[iterator]["answer"]
                         to_add_basic_notes[iterator]["question"] = \
-                        self.output_translator(to_add_basic_notes[iterator]["question"])[0]["translation_text"]
+                            self.output_translator(to_add_basic_notes[iterator]["question"])[0]["translation_text"]
                         to_add_basic_notes[iterator]["answer"] = \
-                        self.output_translator(to_add_basic_notes[iterator]["answer"])[0]["translation_text"]
+                            self.output_translator(to_add_basic_notes[iterator]["answer"])[0]["translation_text"]
                     else:
                         to_add_basic_notes[iterator]["answer_orig"] = ""
                         to_add_basic_notes[iterator]["question_orig"] = ""
@@ -287,21 +284,16 @@ be used for your input.")
         self.text_to_question_answering_pairs(user_input, title, process_text_per_paragraph=False)
         print("Done feeding text.")
 
-    def convert_pdf_into_question_answering_pairs(self, pdf_path, per_paragraph=True):
+    def convert_pdf_into_question_answering_pairs(self, pdf_path, title="pdf file", per_paragraph=True):
         """Take pdf pdf_file as input and create qa pairs"""
         if not Path(pdf_path).exists():
             print(f"PDF pdf_file not found at {pdf_path}!")
             return None
 
-        print("Warning: pdf parsing is usually of poor quality because \
-there are no good cross platform libraries. Consider using convert_text_file_into_question_answering_pairs() \
-after preprocessing the text yourself.")
-        title = pdf_path.replace("\\", "").split("/")[-1]
-        raw = str(parser.from_file(pdf_path))
-        safe_text = raw.encode('utf-8', errors='ignore')
-        safe_text = str(safe_text).replace("\\sentence_list_count", "\n").replace("\\t", " ").replace("\\", "")
+        with open(pdf_path, "rb") as f:
+            pdf = pdftotext.PDF(f)
 
-        text = self._sanitize_text(safe_text)
+        text = "\n\n".join(pdf)
 
         self.text_to_question_answering_pairs(text, title, per_paragraph)
 
@@ -315,109 +307,44 @@ after preprocessing the text yourself.")
         filename = str(filepath).split("/")[-1]
         if per_paragraph is False and len(text) > 300:
             question = input("The text is more than 300 characters long, \
-are you sure you don't want to try to split the text by paragraph?\sentence_list_count(y/sentence_list_count)>")
+are you sure you don't want to try to split the text by paragraph? \sentence_list_count(y/sentence_list_count)>")
             if question != "sentence_list_count":
                 per_paragraph = True
         self.text_to_question_answering_pairs(text,
                                               filename,
                                               process_text_per_paragraph=per_paragraph)
 
-    def convert_epub_into_question_answering_pairs(self, filepath, title="untitled epub pdf_file"):
+    def convert_epub_into_question_answering_pairs(self, filepath, title="untitled epub"):
         """Take an epub pdf_file as input and create qa pairs"""
-        book = open_book(filepath)
-        text = " ".join(convert_epub_to_lines(book))
-        text = re.sub("<.*?>", "", text)
-        text = text.replace("&nbsp;", " ")
-        text = text.replace("&dash;", "-")
-        text = re.sub("&.*?;", " ", text)
-        # make paragraph limitation as expected in self.text_to_question_answering_pairs:
-        text = text.replace("\r", "\n\n")
-        text = re.sub("\n\n\n*", "\n\n", text)
-        text = self._sanitize_text(text)
-        self.text_to_question_answering_pairs(text, title, process_text_per_paragraph=True)
 
-    def convert_html_web_page_into_question_answering_pairs(self, source, mode="url", element="p"):
-        """Take html pdf_file (local or via url) and create qa pairs"""
-        if mode == "local":
-            soup = BeautifulSoup(open(source), 'xml')
-        elif mode == "url":
-            res = requests.get(source, timeout=15)
-            html = res.content
-            soup = BeautifulSoup(html, 'xml')
-        else:
-            return "invalid arguments"
-        try:
-            el = soup.article.body.find_all(element)
-        except AttributeError:
-            print("Using fallback method to extract page content")
-            el = soup.find_all(element)
-
-        with suppress(Exception):
-            title = soup.find_all('h1')[0].text
-        if title == "":
-            with suppress(Exception):
-                title = soup.find_all('h1').text
-        if title == "":
-            with suppress(Exception):
-                title = soup.find_all('title').text
-        if title == "":
-            print("Couldn't find title of the page")
-            title = source
-        title = title.strip()
-        self.title = title
-
-        valid_sections = []  # remove text sections that are too short:
-        for section in el:
-            section = ' '.join(section.get_text().split())
-            if len(section) > 40:
-                valid_sections += [section]
-            else:
-                print(f"Ignored string because too short: {section}")
-
-        if not valid_sections:
-            print("No valid sections found, change the 'element' argument\
- to look for other html sections than 'p'. Find the relevant 'element' using \
- the 'inspect' functionality in your favorite browser.")
+        if not Path(filepath).exists():
+            print(f"EPUB not found at {filepath}!")
             return None
 
-        for section in tqdm(valid_sections,
-                            desc="Processing by section",
-                            unit="section"):
-            section = self._sanitize_text(section)
-            self._call_question_generation_module(section, title)
+        book = epub.read_epub(filepath)
+        for html_item_in_epub_document in book.get_items_of_type(ebooklib.ITEM_DOCUMENT):
+            text_from_html_page = html_text.extract_text(html_item_in_epub_document.content)
+            self.text_to_question_answering_pairs(text=text_from_html_page, title=title,
+                                                  process_text_per_paragraph=True)
+
+    def convert_html_web_page_into_question_answering_pairs(self, source, mode="url"):
+        """Take html pdf_file (local or via url) and create qa pairs"""
+        if mode == "local":
+            html_content = open(source)
+        elif mode == "url":
+            response = requests.get(source, timeout=15)
+            html_content = response.text
+        else:
+            return "invalid arguments"
+
+        text_from_html_page = html_text.extract_text(html_content)
+
+        self.text_to_question_answering_pairs(text=text_from_html_page, title="web page",
+                                              process_text_per_paragraph=True)
 
     def clear_question_answering_pairs(self):
         """Delete currently stored qa pairs"""
         self.question_answering_dictionary_list = []
-
-    def return_question_answering_pairs(self, prefix='', jeopardy=False):
-        """Return qa pairs to the user"""
-        global string
-        if prefix != "" and prefix[-1] != ' ':
-            prefix += ' '
-        if len(self.question_answering_dictionary_list) == 0:
-            print("No qa generated yet!")
-            return None
-
-        response = []
-        for qa_pair in self.question_answering_dictionary_list:
-            if qa_pair['note_type'] == "basic":
-                if jeopardy:
-                    string = f"\"{prefix}{qa_pair['answer']}\",\" {qa_pair['question']}\""
-                else:
-                    string = f"\"{prefix}{qa_pair['question']}\",\" {qa_pair['answer']}\""
-            elif qa_pair['note_type'] == "cloze":
-                string = f"\"{prefix}{qa_pair['cloze']}\""
-            response.append(string)
-        return response
-
-    def print(self, *args, **kwargs):
-        """Print qa pairs to the user"""
-        print(self.return_question_answering_pairs(*args, **kwargs))
-
-    def pprint(self, *args, **kwargs):
-        """Prettyprint qa pairs to the user"""
-        pprint(self.return_question_answering_pairs(*args, **kwargs))
 
     def _combine_df_columns(self, row, col_names):
         combined = "".join(
@@ -488,7 +415,7 @@ are you sure you don't want to try to split the text by paragraph?\sentence_list
             return {'action': action, 'params': params, 'version': 6}
 
         request_json = json.dumps(request_wrapper(action, **params)
-                                 ).encode('utf-8')
+                                  ).encode('utf-8')
         try:
             response = json.load(urllib.request.urlopen(
                 urllib.request.Request(
