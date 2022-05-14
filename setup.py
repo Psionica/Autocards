@@ -26,7 +26,7 @@ setup(
     'pandas == 1.2.3',
     'protobuf == 3.20.1',
     'requests == 2.24.0',
-    'sentencepiece == 0.1.96'
+    'sentencepiece == 0.1.96',
     'tika == 1.24',
     'torch == 1.8.1',
     'tqdm == 4.55.1',
