@@ -1,4 +1,4 @@
-from pipelines import qg_pipeline
+from autocards.pipelines import qg_pipeline
 
 from tqdm import tqdm
 from pathlib import Path
