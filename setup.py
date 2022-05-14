@@ -22,6 +22,7 @@ setup(
   install_requires=[
     'PyPDF2 == 1.26.0',
     'beautifulsoup4 == 4.9.3',
+    'huggingface_hub == 0.3.0',
     'nltk == 3.5',
     'pandas == 1.2.3',
     'protobuf == 3.20.1',
@@ -30,7 +31,7 @@ setup(
     'tika == 1.24',
     'torch == 1.8.1',
     'tqdm == 4.55.1',
-    'transformers == 4.6.1',
+    'transformers == 4.19.1',
     'epub-conversion == 1.0.15',
     'xml_cleaner == 2.0.4'
   ],
