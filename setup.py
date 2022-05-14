@@ -24,7 +24,7 @@ setup(
     'beautifulsoup4 == 4.9.3',
     'nltk == 3.5',
     'pandas == 1.2.3',
-    'protobuf == 3.20.1'
+    'protobuf == 3.20.1',
     'requests == 2.24.0',
     'sentencepiece == 0.1.96'
     'tika == 1.24',
