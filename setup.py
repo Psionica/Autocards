@@ -5,7 +5,9 @@ setup(
   packages = find_packages(exclude=[]),
   include_package_data = True,
   entry_points={
-    'console_scripts': [],
+    'console_scripts': [
+      'autocard = autocards.cli:main'
+    ],
   },
   version = '0.0.1',
   license='MIT',
@@ -22,7 +24,8 @@ setup(
   install_requires=[
     'PyPDF2 == 1.26.0',
     'beautifulsoup4 == 4.9.3',
-    'huggingface_hub == 0.3.0',
+    'fastcore == 1.4.2',
+    'huggingface_hub == 0.6.0',
     'nltk == 3.5',
     'pandas == 1.2.3',
     'protobuf == 3.20.1',
