@@ -25,7 +25,6 @@ setup(
     'PyPDF2 == 1.26.0',
     'beautifulsoup4 == 4.9.3',
     'fastcore == 1.4.2',
-    'huggingface_hub == 0.6.0',
     'nltk == 3.5',
     'pandas == 1.2.3',
     'protobuf == 3.20.1',
