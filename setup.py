@@ -35,7 +35,8 @@ setup(
     'tqdm == 4.55.1',
     'transformers == 4.19.1',
     'epub-conversion == 1.0.15',
-    'xml_cleaner == 2.0.4'
+    'xml_cleaner == 2.0.4',
+    'lxml'
   ],
   classifiers=[
     'Development Status :: 4 - Beta',
