@@ -15,17 +15,18 @@ setup(
   author = 'Paul Bricman',
   author_email = 'paulbricman@protonmail.com',
   long_description_content_type = 'text/markdown',
-  url = 'https://github.com/ncoop57/Autocards/tree/master',
+  url = 'https://github.com/paulbricman/autocards',
   keywords = [
     'artificial intelligence',
     'deep learning',
-    'text to image'
+    'anki',
+    'flashcards',
+    'learning'
   ],
   install_requires=[
     'PyPDF2 == 1.26.0',
     'beautifulsoup4 == 4.9.3',
     'fastcore == 1.4.2',
-    'huggingface_hub == 0.6.0',
     'nltk == 3.5',
     'pandas == 1.2.3',
     'protobuf == 3.20.1',
@@ -36,7 +37,8 @@ setup(
     'tqdm == 4.55.1',
     'transformers == 4.19.1',
     'epub-conversion == 1.0.15',
-    'xml_cleaner == 2.0.4'
+    'xml_cleaner == 2.0.4',
+    'lxml'
   ],
   classifiers=[
     'Development Status :: 4 - Beta',
