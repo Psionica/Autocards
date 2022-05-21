@@ -19,7 +19,9 @@ setup(
   keywords = [
     'artificial intelligence',
     'deep learning',
-    'text to image'
+    'anki',
+    'flashcards',
+    'learning'
   ],
   install_requires=[
     'PyPDF2 == 1.26.0',
