@@ -1,5 +1,7 @@
 import itertools
 import logging
+import nltk
+
 from typing import Optional, Dict, Union
 
 from nltk import sent_tokenize
@@ -45,6 +47,8 @@ class QGPipeline:
             self.model_type = "t5"
         else:
             self.model_type = "bart"
+        
+        nltk.download('punkt')
 
     def __call__(self, inputs: str):
         inputs = " ".join(inputs.split())
