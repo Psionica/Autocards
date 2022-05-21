@@ -15,7 +15,7 @@ setup(
   author = 'Paul Bricman',
   author_email = 'paulbricman@protonmail.com',
   long_description_content_type = 'text/markdown',
-  url = 'https://github.com/ncoop57/Autocards/tree/master',
+  url = 'https://github.com/paulbricman/autocards',
   keywords = [
     'artificial intelligence',
     'deep learning',
